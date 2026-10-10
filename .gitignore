@@ -1,0 +1,57 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.env/
+.venv/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# TORCS compiled artifacts
+vtorcs-RL-color/src/**/*.o
+vtorcs-RL-color/src/**/*.lo
+vtorcs-RL-color/src/**/*.la
+vtorcs-RL-color/src/**/*.a
+vtorcs-RL-color/src/**/*.so
+vtorcs-RL-color/src/**/*.dll
+vtorcs-RL-color/.torcs.rc
+
+# Logs and experiment outputs
+*.log
+results/
+outputs/
+runs/
+checkpoints/
+saved_models/
+*.h5
+*.pkl
+*.npy
+*.npz
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Coverage / testing
+.coverage
+htmlcov/
+.pytest_cache/
