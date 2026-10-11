@@ -570,8 +570,8 @@ def drive_example(c):
 
     lookahead = 0.6 * soft_min + 0.4 * w_dist   # blend: safety + smoothness
     # Variable-k: scale coefficient up on wide straights/sweepers, keep 14.1 on tight corners.
-    # At soft_min=50m (tight hairpin): k=14.1; at soft_min>=150m (open straight): k=25.0
-    k_blend = 14.1 + (25.0 - 14.1) * max(0.0, min(1.0, (soft_min - 50) / 100.0))
+    # At soft_min=50m (tight hairpin): k=14.1; at soft_min>=150m (open straight): k=30.0
+    k_blend = 14.1 + (30.0 - 14.1) * max(0.0, min(1.0, (soft_min - 50) / 100.0))
     # Physics-based speed cap
     physics_limit = k_blend * (lookahead ** 0.5)
     # Absolute ceiling: 280 km/h (matches TORCS car top speed range)
