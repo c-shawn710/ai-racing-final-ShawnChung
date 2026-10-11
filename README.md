@@ -1,208 +1,133 @@
-# gym-torcs — High-Performance Rule-Based Driver for TORCS
+# AI Racing League — TORCS Driver
 
-A Python 3 OpenAI-Gym-style environment for the
-[TORCS](http://torcs.sourceforge.net/) open-source racing simulator,
-with a fully rewritten rule-based driving model built on top of the
-original gym-torcs.
+A Python racing driver improved for the IBM SkillsBuild AI Racing League challenge. The driver uses TORCS sensor readings to control steering, acceleration, braking, and gears.
 
----
+## Project description / problem statement
 
-## Best result
+The supplied baseline driver could not complete a lap in my tests: it would get stuck at a corner or against a wall. My first priority was to troubleshoot that behaviour and complete a lap successfully. Once the car could finish, I improved its lap time little by little while aiming for zero damage.
 
-| Track | Lap time | Top speed | Damage |
-|---|---|---|---|
-| Michigan oval (20 laps) | **01:55:10** | **249 km/h** | **0** |
+The final driver uses rules and sensor feedback rather than a trained machine learning model.
 
----
+## Results
 
-## How to run
+| Track | Best recorded lap | Top speed | Recorded damage |
+| --- | --- | --- | --- |
+| Corkscrew | **1:55.10** | **249 km/h** | **0** |
 
-1. Launch TORCS and start a Practice race on the Michigan oval.
-2. In a second terminal:
+These are recorded development results, not a guarantee for every run. Additional runs are listed in [lap_data.csv](lap_data.csv).
 
-```bash
-python snakeoil3_gym.py
-```
+| Development milestone | Lap time | Top speed |
+| --- | --- | --- |
+| Acceleration ramp increased to 0.20 per step | 1:57.43 | 235 km/h |
+| Steering boost of 1.5× during braking | 1:55.65 | 236 km/h |
+| Speed-scaled preview steering | **1:55.10** | **249 km/h** |
 
-The driver connects automatically on the default port. Do **not** hardcode
-the port — the `Client` class reads it from the command line.
+## Enhancements
 
----
+1. **Lap completion and recovery:** Reworked steering and speed control, added braking, and added reverse recovery when the car is nearly stationary near the track edge. The initial goal was to stop the car getting stuck and make it complete a lap.
+2. **Faster acceleration and better speed control:** Increased the throttle ramp to **0.20 per step**, added a sensor-based corner-speed model and proportional braking, and adjusted automatic gear thresholds to regain speed after turns.
+3. **Earlier corner steering:** Added preview steering that responds to differences between left and right track sensors. Its gain increases with speed, and a **1.5× steering boost during braking** helps the car rotate while slowing down.
 
-## Driver architecture (`snakeoil3_gym.py` → `drive_example()`)
+## Use of IBM Bob
 
-All driving logic lives in a single function called every simulation step
-(~50 Hz). No machine learning, no pre-recorded data — pure sensor-reactive
-control.
+I first used IBM Bob to help troubleshoot why the baseline car was getting stuck. Once it could complete a lap, Bob helped suggest and refine changes to acceleration, braking, steering, and recovery.
 
-### 1. Physics-based corner speed model
+I ran the simulator after changes, compared lap times, top speeds, and damage, and used Git to restore working versions when experiments caused crashes or unstable acceleration and braking. This taught me to establish a working baseline first and validate AI suggestions through testing before keeping an improvement.
 
-```
-target_speed = min(320, k_blend × √lookahead)
-```
+## Chosen script and dependencies
 
-- **`soft_min`** — the maximum of the 7 most forward-facing track sensors
-  (indices 6–12). Using the maximum rather than minimum filters out spurious
-  short readings caused by the inner wall receding at an angle, so the car
-  does not brake prematurely on long straights.
-- **`lookahead`** — blends `soft_min` (60%) with a weighted average of all
-  19 sensors (40%) for smoothness.
-- **`k_blend`** — variable coefficient: `14.1` at `soft_min ≤ 50 m`
-  (tight hairpin, physics grip limit), linearly rising to `50.0` at
-  `soft_min ≥ 150 m` (open straight). The hairpin value is derived from
-  `v = √(2μgd)` with μ ≈ 0.9g.
+Run **[snakeoil3_gym_workingcopy.py](snakeoil3_gym_workingcopy.py)**, which contains the improved `drive_example()` function.
 
-### 2. Anticipatory (preview) steering
+| Requirement | Purpose |
+| --- | --- |
+| Python 3 | Runs the driver |
+| A workshop-compatible TORCS/SCR installation | Runs the simulator and exposes the racing server |
+| Corkscrew track and an SCR-controlled car | Reproduces the track and client setup used for development |
+| Git | Downloads the repository using the commands below |
 
-The 19 sensors are arranged in a fan. Asymmetry between the left and right
-near-forward sensors (indices 3–8 vs 10–15) reveals an upcoming corner
-before the car's heading angle changes:
+The selected Python script uses only standard-library modules: `socket`, `sys`, `getopt`, `os`, and `time`. It does not require additional pip packages.
 
-```python
-imbalance   = right_near_avg − left_near_avg   # positive = left corner ahead
-preview_gain = 0.0012 + 0.000020 × max(0, speed − 50)
-preview_steer = −imbalance × preview_gain
-```
+The `vtorcs-RL-color/` directory in this repository currently contains installation documentation only. A complete simulator installation must be supplied separately, such as the environment provided for the workshop.
 
-The gain **scales with speed**: at 200 km/h the car starts rotating into the
-corner ~3.5× earlier than at low speed, so it arrives at the apex already
-pointed correctly instead of braking to near-zero and then turning.
+## Setup and run
 
-### 3. Braking-phase steer boost
+These steps assume the workshop-compatible TORCS simulator is already installed and configured.
 
-During braking (`speed > target_speed`), the computed steer signal is
-amplified by **1.5×**:
+1. Download the project and check Python:
 
-```python
-R['steer'] = clip(R['steer'] * 1.5, -1, 1)
-```
+   ```bash
+   git clone https://github.com/c-shawn710/ai-racing-final-ShawnChung.git
+   cd ai-racing-final-ShawnChung
+   python3 --version
+   ```
 
-This coordinates braking and steering simultaneously — the car rotates into
-the corner *while* slowing down rather than after.
+2. Start the workshop TORCS simulator. If its launcher is available on your PATH:
 
-### 4. Speed-scaled steering centering
+   ```bash
+   torcs
+   ```
 
-```python
-center_gain = max(0.025, 0.20 − 0.0007 × max(0, speed − 50))
-```
+3. In TORCS, select a **Practice** session on the **Michigan oval** and the workshop's SCR-controlled car. Keep **damage enabled** when evaluating the zero-damage goal. Start the session so the racing server is ready for the Python client.
 
-At ≤50 km/h: gain = 0.20 (strong wall-avoidance).
-At 200 km/h: gain = 0.07 (gentle, no wobble on straights).
+4. In a second terminal, from the project directory, run:
 
-### 5. Throttle and braking
+   ```bash
+   python3 snakeoil3_gym_workingcopy.py
+   ```
 
-- **Accel ramp**: `+0.20/step` — reaches full throttle in ~0.1 s after
-  corner exit.
-- **Braking divisor**: `max(30, speed × 0.25)` — firm at high speed,
-  gentle at low speed.
-- **TCS**: backs off throttle by 0.2 when rear wheel spin exceeds front
-  by >5 rad/s.
+   The client defaults to `localhost` on UDP port `3001`. If your simulator uses another host or port, pass them as command-line options:
 
-### 6. Automatic transmission
+   ```bash
+   python3 snakeoil3_gym_workingcopy.py --host localhost --port 3001
+   ```
 
-| Speed (km/h) | Gear |
-|---|---|
-| < 40 | 1 |
-| 40–70 | 2 |
-| 70–100 | 3 |
-| 100–135 | 4 |
-| 135–170 | 5 |
-| > 170 | 6 |
+   Use the port assigned by the workshop when it differs from the default.
 
-### 7. Stuck recovery
+5. Check the completed lap time, top speed, and damage in the simulator. To view client options:
 
-If `|speedX| < 3 km/h` and `|trackPos| > 0.8`, engage reverse, steer away
-from the wall, apply 50% throttle.
+   ```bash
+   python3 snakeoil3_gym_workingcopy.py --help
+   ```
 
----
+## Driver behaviour
 
-## Optimisation history
+- **Corner speed:** Combines seven forward track sensors with a weighted average of all 19 sensors to estimate lookahead. The target follows `min(320, k_blend * sqrt(lookahead))`, with `k_blend` ranging from `14.1` to `50.0`. The **320 km/h** value is a configured ceiling, not an achieved top speed.
+- **Preview steering:** Uses `0.0012 + 0.000020 * max(0, speed - 50)` as the preview gain. This allows the driver to respond to an upcoming bend before its heading error grows.
+- **Steering while braking:** Multiplies the combined steering signal by `1.5` when the car is at or above its target speed.
+- **Throttle and braking:** Ramps throttle by `0.20` per step below target speed and applies braking in proportion to excess speed above target.
+- **Automatic gears:** Shifts up above 40, 70, 100, 135, and 170 km/h.
+- **Recovery:** Selects reverse and 50% throttle when `abs(speedX) < 3` and `abs(trackPos) > 0.8`.
 
-| Commit | Change | Lap time | Top speed |
-|---|---|---|---|
-| `a9664b1` | soft-min + variable-k baseline | 02:10:91 | — |
-| `e8e1e52` | low-speed boost safety fix | 02:10:66 | — |
-| `0d7d6e3` | soft_min index `[2]→[3]` | 02:09:78 | 206 |
-| `8cdc782` | soft_min index `[3]→[4]` | 02:09:27 | 202 |
-| `d9bc553` | soft_min index `[4]→[5]` | 02:08:02 | 208 |
-| `02cbdd4` | soft_min index `[5]→[6]` (max) | 02:06:66 | 209 |
-| `92ed4b4` | k ceiling `17.0→17.5` | 02:06:25 | 212 |
-| `888f287` | k ceiling `17.5→19.0` | 02:05:82 | 208 |
-| `eab67b7` | k ceiling `19.0→25.0` | 02:03:93 | 216 |
-| `3ae2e6a` | k ceiling `25.0→30.0` | 02:02:90 | 219 |
-| `b385878` | k ceiling `30.0→40.0` | 01:59:04 | 231 |
-| `bff8305` | anticipatory steer + ceiling 320 | 02:01:28 | 220 |
-| `f7a8dc7` | k ceiling `40.0→50.0` | 01:58:49 | 233 |
-| `eab5bf5` | tighter sensor range for preview steer | 01:58:32 | 235 |
-| `fe1e9f7` | accel ramp `0.10→0.20/step` | 01:57:43 | 235 |
-| `26d00b9` | braking-phase steer boost `1.5×` | 01:55:65 | 236 |
-| `d931060` | braking-phase steer boost `2.0×` | 01:55:45 | 236 |
-| `8cb33a1` | **speed-scaled preview gain** | **01:55:10** | **249** |
+## Known limitations / current project state
 
----
+- **Corner entry still needs refinement.** The earlier hard-brake-then-turn behaviour improved during development, but smoother braking and turning remain an area for further work.
+- **The settings were tuned for the Michigan oval.** Other tracks and simulator configurations need separate testing.
+- **Recovery has a narrow trigger.** It may miss some post-crash situations, including a car stuck away from the track edge.
+- **Aggressive settings were unstable.** Higher braking steering boosts and softer braking caused crashes or acceleration/braking oscillation in experiments. The final version keeps the 1.5× boost and the `speed * 0.25` braking divisor.
+- **Simulator setup is external.** This repository does not include the complete TORCS installation or the workshop race configuration.
+- **The legacy reconnect path needs attention.** It references `autostart.sh`, which is not included, and attempts to relaunch TORCS with `-nodamage`. Start the simulator before the driver and ensure damage stays enabled during evaluation.
 
-## Files
+The current submission version can complete laps and has a recorded best result of **1:55.10 with zero damage**. The next improvement would be smoother corner entry while preserving reliable lap completion.
+
+## Video demonstration
+
+**Video link:** [Watch Demo Here](https://drive.google.com/file/d/1IdUUXGDiMnkDWOjEUCVXuNPKLLLMkno1/view?usp=sharing)
+
+The demonstration should show the driver completing a lap and the resulting lap time, top speed, and damage.
+
+## Repository files
 
 | File | Purpose |
-|---|---|
-| `snakeoil3_gym.py` | **Main driver** — all driving logic in `drive_example()` |
-| `gym_torcs.py` | OpenAI-Gym wrapper for RL use |
-| `practice.xml` | Race config: Michigan oval, 20 laps |
-| `jmcncarai.py` | Reference client (IBM-supplied, unmodified) |
-| `snakeoil3_jm2.py` | Reference client (IBM-supplied, unmodified) |
+| --- | --- |
+| `snakeoil3_gym_baseline.py` | Supplied baseline retained for comparison |
+| `snakeoil3_gym_workingcopy.py` | Improved driver used for this submission |
+| `lap_data.csv` | Recorded development runs and results |
+| `README.md` | Project description, setup, results, improvements, and limitations |
 
----
+## Credits
 
-## Track: Michigan Oval
+Developed from the IBM SkillsBuild workshop materials and the original gym-torcs / Snake Oil Python client work.
 
-| Segment | Type | Radius | Distance |
-|---|---|---|---|
-| 0 | Left sweeper | 600 m | 0–356 m |
-| 100 | Left sweeper | 535 m | 356–524 m |
-| **200** | **Tight hairpin** | **120 m** | **524–792 m** |
-| 400–600 | Pit straight | — | 792–1520 m |
-| **700** | **Tight hairpin** | **120 m** | **1520–1787 m** |
-| 800 | Left sweeper | 535 m | 1787–1955 m |
-| 900 | Left sweeper | 600 m | 1955–2312 m |
-
-All corners are left-hand turns. Track width: 18 m.
-The two hairpins (r=120 m) set the physics safety floor: `k=14.1`,
-`target_speed ≈ 117 km/h` at the apex.
-
----
-
-# Original gym-torcs README
-
-Gym-TORCS is the reinforcement learning (RL) environment in TORCS domain
-with OpenAI-gym-like interface. TORCS is the open-source realistic car racing
-simulator recently used as RL benchmark task in several AI studies.
-
-This code is developed based on
-[vtorcs](https://github.com/giuse/vtorcs) and
-[python-client for torcs](http://xed.ch/project/snakeoil/index.html).
-
-The detailed explanation of original TORCS for AI research is given by
-Daniele Loiacono et al. (https://arxiv.org/pdf/1304.1672.pdf)
-
-## Requirements
-
-- Python 3
-- xautomation
-- OpenAI-Gym
-- numpy
-- vtorcs-RL-color
-
-## Simple How-To
-
-```python
-from gym_torcs import TorcsEnv
-
-env = TorcsEnv(vision=False, throttle=True)
-ob = env.reset(relaunch=True)
-
-from sample_agent import Agent
-agent = Agent(1)
-action = agent.act(ob, reward, done, vision=True)
-ob, reward, done, _ = env.step(action)
-env.end()
-```
+- [TORCS](http://torcs.sourceforge.net/)
+- [Snake Oil Python client — Chris X Edwards](http://xed.ch/project/snakeoil/index.html)
+- [vtorcs](https://github.com/giuseppecuccu/vtorcs/tree/nosegfault)
