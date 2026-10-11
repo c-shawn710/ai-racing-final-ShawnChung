@@ -561,7 +561,10 @@ def drive_example(c):
     left_near  = sum(track[3:9])  / 6.0
     right_near = sum(track[10:16]) / 6.0
     imbalance = right_near - left_near   # positive = left corner ahead
-    preview_steer = -imbalance * 0.0012
+    # Speed-scaled preview gain: at 50 km/h = 0.0012, at 200 km/h = 0.0042.
+    # At high approach speed the car needs to start rotating much earlier.
+    preview_gain = 0.0012 + 0.000020 * max(0, speed - 50)
+    preview_steer = -imbalance * preview_gain
     R['steer'] = clip(angle_steer + center_steer + preview_steer, -1, 1)
     # Sensor weights: peak at centre (index 9), tapering off to sides
     weights = [0.05, 0.05, 0.08, 0.10, 0.12, 0.15, 0.17, 0.20, 0.22,
@@ -593,11 +596,11 @@ def drive_example(c):
     else:
         # Proportional braking scaled to current speed so high-speed stops are firm.
         R['accel'] = 0
-        braking_divisor = max(30.0, speed * 0.25)   # harder brake at higher speed
+        braking_divisor = max(30.0, speed * 0.25)
         R['brake'] = clip(-speed_error / braking_divisor, 0, 1)
-        # Braking-phase steer boost: amplify angle correction by 2.0× while braking
+        # Braking-phase steer boost: amplify angle correction by 1.5× while braking
         # so the car rotates into the corner simultaneously with slowing down.
-        R['steer'] = clip(R['steer'] * 2.0, -1, 1)
+        R['steer'] = clip(R['steer'] * 1.5, -1, 1)
 
     # Extra boost at very low speeds (start / post-stuck).
     # Guard: speed >= 0 preserves standing-start (speed==0) while preventing
