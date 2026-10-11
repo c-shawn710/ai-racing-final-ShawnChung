@@ -562,11 +562,11 @@ def drive_example(c):
                0.22, 0.20, 0.17, 0.15, 0.12, 0.10, 0.08, 0.05, 0.05]
     # Weighted minimum lookahead distance
     w_dist = sum(w * d for w, d in zip(weights, track)) / sum(weights)
-    # Soft-min: 4th-lowest of 7 forward sensors (filters one more spurious low reading).
-    # At hairpins all 7 sensors are short so [3] is still short — safety unchanged.
-    # On sweepers/straights one extra outlier is ignored, allowing slightly higher speed.
+    # Soft-min: 5th-lowest of 7 forward sensors (filters two spurious low readings).
+    # At hairpins all 7 sensors are short so [4] is still short — safety unchanged.
+    # On sweepers/straights two outliers ignored, allowing slightly higher speed.
     forward_sensors = sorted(track[6:13])
-    soft_min = forward_sensors[3]
+    soft_min = forward_sensors[4]
 
     lookahead = 0.6 * soft_min + 0.4 * w_dist   # blend: safety + smoothness
     # Variable-k: scale coefficient up on wide straights/sweepers, keep 14.1 on tight corners.
