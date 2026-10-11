@@ -595,9 +595,9 @@ def drive_example(c):
         R['accel'] = 0
         braking_divisor = max(30.0, speed * 0.25)   # harder brake at higher speed
         R['brake'] = clip(-speed_error / braking_divisor, 0, 1)
-        # Braking-phase steer boost: amplify angle correction by 1.5× while braking
+        # Braking-phase steer boost: amplify angle correction by 2.0× while braking
         # so the car rotates into the corner simultaneously with slowing down.
-        R['steer'] = clip(R['steer'] * 1.5, -1, 1)
+        R['steer'] = clip(R['steer'] * 2.0, -1, 1)
 
     # Extra boost at very low speeds (start / post-stuck).
     # Guard: speed >= 0 preserves standing-start (speed==0) while preventing
