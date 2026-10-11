@@ -1,57 +1,14 @@
-﻿# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.egg
-*.egg-info/
-dist/
-build/
-.eggs/
+﻿# 1. Ignore absolutely everything by default
+*
 
-# Virtual environments
-venv/
-env/
-.env/
-.venv/
+# 2. Do not ignore folders
+!*/
 
-# IDE / editor
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
+# 3. Allow your specific required files
+!README.md
+!lap_data.csv
+!snakeoil3_gym_baseline.py
+!snakeoil3_gym_workingcopy.py
 
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# TORCS compiled artifacts
-vtorcs-RL-color/src/**/*.o
-vtorcs-RL-color/src/**/*.lo
-vtorcs-RL-color/src/**/*.la
-vtorcs-RL-color/src/**/*.a
-vtorcs-RL-color/src/**/*.so
-vtorcs-RL-color/src/**/*.dll
-vtorcs-RL-color/.torcs.rc
-
-# Logs and experiment outputs
-*.log
-results/
-outputs/
-runs/
-checkpoints/
-saved_models/
-*.h5
-*.pkl
-*.npy
-*.npz
-
-# Jupyter
-.ipynb_checkpoints/
-
-# Coverage / testing
-.coverage
-htmlcov/
-.pytest_cache/
+# 4. Allow the gitignore file itself
+!.gitignore
