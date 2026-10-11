@@ -531,92 +531,70 @@ def destringify(s):
             return [destringify(i) for i in s]
 
 def drive_example(c):
-    '''High-performance driver: physics-based corner speed, wide lookahead,
-    speed-scaled steering, fast throttle, proportional braking, stuck recovery.'''
+    '''Improved driver: corner-aware speed control, braking, and stuck recovery.'''
     S, R = c.S.d, c.R.d
 
-    speed = S['speedX']  # km/h forward velocity
-
     # ----- Steering -----
-    # Angle correction: gain 10/PI (~3.18).
-    # Track-centering gain is reduced at high speed to prevent wobble on straights
-    # (at 200 km/h a gain of 0.20 is far too twitchy).
-    angle_steer = S['angle'] * 10 / PI
-    center_gain = 0.20 - 0.0007 * max(0, speed - 50)   # 0.20 at <=50, 0.095 at 150, 0.025 at 250
-    center_gain = max(0.025, center_gain)
-    center_steer = -S['trackPos'] * center_gain
-    R['steer'] = clip(angle_steer + center_steer, -1, 1)
+    # Angle gain reduced from 15 to 10 to reduce oscillation/oversteer.
+    # Track-centering gain increased from 0.10 to 0.20 for stronger wall avoidance.
+    R['steer'] = S['angle'] * 10 / PI
+    R['steer'] -= S['trackPos'] * 0.20
+    R['steer'] = clip(R['steer'], -1, 1)
 
-    # ----- Physics-based corner speed limit -----
-    # Use all 19 track sensors with a weighted lookahead.
-    # Sensor angles (degrees): -45 -19 -12 -7 -4 -2.5 -1.7 -1 -0.5 0 0.5 1 1.7 2.5 4 7 12 19 45
-    # Weight: sensors close to straight-ahead carry more weight.
-    # v_safe = sqrt(2 * lateral_grip * g * d)  with lateral_grip≈0.9g, g≈9.8 m/s²
-    # Convert to km/h: v(km/h) = 3.6 * sqrt(2 * 0.9 * 9.8 * d_meters)
-    # d_meters ≈ sensor_reading (TORCS units ≈ metres up to 200 m)
-    # Simplifies to: v_limit ≈ 14.1 * sqrt(d)  km/h  (conservative factor keeps damage=0)
-    track = S.get('track', [100] * 19)
-    # Sensor weights: peak at centre (index 9), tapering off to sides
-    weights = [0.05, 0.05, 0.08, 0.10, 0.12, 0.15, 0.17, 0.20, 0.22,
-               0.25,
-               0.22, 0.20, 0.17, 0.15, 0.12, 0.10, 0.08, 0.05, 0.05]
-    # Weighted minimum lookahead distance
-    w_dist = sum(w * d for w, d in zip(weights, track)) / sum(weights)
-    # Soft-min: 3rd-lowest of 7 forward sensors (avoids false braking from receding inner wall)
-    forward_sensors = sorted(track[6:13])
-    soft_min = forward_sensors[2]
-
-    lookahead = 0.6 * soft_min + 0.4 * w_dist   # blend: safety + smoothness
-    # Variable-k: scale coefficient up on wide straights/sweepers, keep 14.1 on tight corners.
-    # At soft_min=50m (tight hairpin): k=14.1; at soft_min=150m (sweeper): k blends toward 17.0
-    k_blend = 14.1 + (17.0 - 14.1) * max(0.0, min(1.0, (soft_min - 50) / 100.0))
-    # Physics-based speed cap
-    physics_limit = k_blend * (lookahead ** 0.5)
-    # Absolute ceiling: 280 km/h (matches TORCS car top speed range)
-    target_speed = min(280, physics_limit)
+    # ----- Corner-aware target speed -----
+    # Use the minimum of the 5 forward-facing track sensors (indices 7..11)
+    # to estimate how much straight road is ahead. Short reading = tight corner
+    # = lower target speed.  This prevents flying into corners at 300 km/h.
+    track = S.get('track', [100]*19)
+    forward_sensors = track[7:12]          # sensors covering roughly ±4 degrees
+    min_forward = min(forward_sensors) if forward_sensors else 100.0
+    # Scale: at 200 m ahead -> 150 km/h cap; at 30 m ahead -> ~40 km/h cap.
+    corner_speed_limit = 10 + 1.4 * min_forward  # gentle linear ramp
+    target_speed = min(150, corner_speed_limit)
 
     # ----- Throttle / Brake -----
-    speed_error = target_speed - speed
+    speed_error = target_speed - S['speedX']
     if speed_error > 0:
-        # Faster accel ramp (0.10/step vs old 0.05) — reaches full throttle in ~2 s.
-        R['accel'] = clip(R['accel'] + 0.10, 0, 1)
+        # Need to accelerate. Small increments to avoid wheel spin.
+        R['accel'] = clip(R['accel'] + 0.05, 0, 1)
         R['brake'] = 0
     else:
-        # Proportional braking scaled to current speed so high-speed stops are firm.
+        # Over target speed: lift off and brake proportionally.
         R['accel'] = 0
-        braking_divisor = max(30.0, speed * 0.25)   # harder brake at higher speed
-        R['brake'] = clip(-speed_error / braking_divisor, 0, 1)
+        R['brake'] = clip(-speed_error / 50.0, 0, 1)
 
-    # Extra boost at very low speeds (start / post-stuck).
-    if speed < 10:
-        R['accel'] += 1 / (speed + 0.1)
+    # Extra boost at very low speeds (e.g. just after start or after stuck).
+    if S['speedX'] < 10:
+        R['accel'] += 1 / (S['speedX'] + 0.1)
         R['brake'] = 0
 
-    # Traction Control System: back off if rear spins more than front by >5 rad/s.
+    # Traction Control System: reduce power if rear wheels spin more than front.
     if ((S['wheelSpinVel'][2] + S['wheelSpinVel'][3]) -
             (S['wheelSpinVel'][0] + S['wheelSpinVel'][1]) > 5):
-        R['accel'] = max(0, R['accel'] - 0.2)
+        R['accel'] -= 0.2
 
     # ----- Stuck Recovery -----
-    stuck = (abs(speed) < 3 and abs(S['trackPos']) > 0.8)
+    # If the car is nearly stationary for a noticeable angle/trackPos offset,
+    # reverse briefly using gear -1.
+    stuck = (abs(S['speedX']) < 3 and abs(S['trackPos']) > 0.8)
     if stuck:
         R['gear'] = -1
-        R['steer'] = -S['trackPos']
+        R['steer'] = -S['trackPos']   # steer away from wall while reversing
         R['accel'] = 0.5
         R['brake'] = 0
         return
 
     # ----- Automatic Transmission -----
     R['gear'] = 1
-    if speed > 40:
+    if S['speedX'] > 50:
         R['gear'] = 2
-    if speed > 70:
+    if S['speedX'] > 80:
         R['gear'] = 3
-    if speed > 100:
+    if S['speedX'] > 110:
         R['gear'] = 4
-    if speed > 135:
+    if S['speedX'] > 140:
         R['gear'] = 5
-    if speed > 170:
+    if S['speedX'] > 170:
         R['gear'] = 6
     return
 
