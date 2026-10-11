@@ -1,0 +1,24 @@
+run,commit,change,lap_time,top_speed_kmh,damage,pit_stops,notes
+1,3884f16,Original code (target_speed=150 cap),02:55:39,150,0,0,Pre-improvement baseline
+2,,Variable-k first attempt,02:15:13,181,0,0,Session run — code reverted before commit
+3,,Variable-k refined,02:12:93,198,0,0,Session run — code reverted before commit
+4,a9664b1,soft-min [2] + variable-k committed baseline,02:10:91,201,0,0,First committed improvement
+5,c71241a,soft-min + variable-k (mislabelled commit),02:09:91,210,0,0,Real run — code was reverted externally before correct commit
+6,,Outside-in steer bias test (regression),02:10:94,205,0,0,Steer bias +0.35 hurt speed model via right-wall sensors
+7,e8e1e52,Low-speed boost safety fix (0<=speed<10),02:10:66,,0,0,
+8,0d7d6e3,soft_min index [2]->[3] (4th-lowest of 7),02:09:78,206,0,0,
+9,8cdc782,soft_min index [3]->[4] (5th-lowest of 7),02:09:27,202,0,0,
+10,d9bc553,soft_min index [4]->[5] (6th-lowest of 7),02:08:02,208,0,0,
+11,02cbdd4,soft_min index [5]->[6] (max of 7),02:06:66,209,0,0,
+12,02cbdd4,soft_min index [5]->[6] (confirmation run),02:06:66,209,0,0,Duplicate confirming result
+13,92ed4b4,k ceiling 17.0->17.5,02:06:25,212,0,0,
+14,888f287,k ceiling 17.5->19.0,02:05:82,208,0,0,
+15,eab67b7,k ceiling 19.0->25.0,02:03:93,216,0,0,
+16,3ae2e6a,k ceiling 25.0->30.0,02:02:90,219,0,0,
+17,bff8305,Anticipatory steer + ceiling 320 km/h,02:01:28,220,0,0,
+18,b385878,k ceiling 30.0->40.0,01:59:04,231,0,0,
+19,f7a8dc7,k ceiling 40.0->50.0,01:58:49,233,0,0,
+20,eab5bf5,Tighter sensor range for preview steer (sensors 3-8 vs 10-15),01:58:32,235,0,0,
+21,fe1e9f7,Accel ramp 0.10->0.20/step,01:57:43,235,0,0,
+22,d931060,Braking-phase steer boost 2.0x,01:55:45,227,0,0,Oscillation on final straight — not reliable
+23,8cb33a1,Speed-scaled preview gain (0.0012 + 0.000020 * speed),01:55:10,249,0,0,Final submission — best confirmed result
