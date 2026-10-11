@@ -555,12 +555,14 @@ def drive_example(c):
     # d_meters ≈ sensor_reading (TORCS units ≈ metres up to 200 m)
     # Simplifies to: v_limit ≈ 14.1 * sqrt(d)  km/h  (conservative factor keeps damage=0)
     track = S.get('track', [100] * 19)
-    # Anticipatory steering: sensor fan asymmetry previews upcoming corners.
-    # Left sensors shorter than right → left bend ahead → pre-steer left (negative).
-    # Gain 0.0008 is small — just enough to begin turning before angle sensor reacts.
-    left_avg  = sum(track[0:9])  / 9.0
-    right_avg = sum(track[10:19]) / 9.0
-    preview_steer = -(right_avg - left_avg) * 0.0008
+    # Anticipatory steering: near-forward sensor asymmetry previews upcoming corners.
+    # Use sensors 3-8 (left near-forward) vs 10-15 (right near-forward) — ±4° to ±19°.
+    # These respond to corner geometry earlier than the angle sensor does.
+    # Left shorter than right → left bend ahead → pre-steer left (negative).
+    left_near  = sum(track[3:9])  / 6.0
+    right_near = sum(track[10:16]) / 6.0
+    imbalance = right_near - left_near   # positive = left corner ahead
+    preview_steer = -imbalance * 0.0012
     R['steer'] = clip(angle_steer + center_steer + preview_steer, -1, 1)
     # Sensor weights: peak at centre (index 9), tapering off to sides
     weights = [0.05, 0.05, 0.08, 0.10, 0.12, 0.15, 0.17, 0.20, 0.22,
