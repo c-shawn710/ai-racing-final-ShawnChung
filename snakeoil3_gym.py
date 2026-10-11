@@ -538,9 +538,8 @@ def drive_example(c):
     speed = S['speedX']  # km/h forward velocity
 
     # ----- Steering -----
-    # Angle correction: gain 10/PI (~3.18).
-    # Track-centering gain is reduced at high speed to prevent wobble on straights
-    # (at 200 km/h a gain of 0.20 is far too twitchy).
+    # Angle correction: gain 10/PI (~3.18) on straights.
+    # Track-centering gain reduced at high speed to prevent wobble.
     angle_steer = S['angle'] * 10 / PI
     center_gain = 0.20 - 0.0007 * max(0, speed - 50)   # 0.20 at <=50, 0.095 at 150, 0.025 at 250
     center_gain = max(0.025, center_gain)
@@ -596,6 +595,9 @@ def drive_example(c):
         R['accel'] = 0
         braking_divisor = max(30.0, speed * 0.25)   # harder brake at higher speed
         R['brake'] = clip(-speed_error / braking_divisor, 0, 1)
+        # Braking-phase steer boost: amplify angle correction by 1.5× while braking
+        # so the car rotates into the corner simultaneously with slowing down.
+        R['steer'] = clip(R['steer'] * 1.5, -1, 1)
 
     # Extra boost at very low speeds (start / post-stuck).
     # Guard: speed >= 0 preserves standing-start (speed==0) while preventing
