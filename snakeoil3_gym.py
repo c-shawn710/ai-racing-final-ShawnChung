@@ -545,7 +545,6 @@ def drive_example(c):
     center_gain = 0.20 - 0.0007 * max(0, speed - 50)   # 0.20 at <=50, 0.095 at 150, 0.025 at 250
     center_gain = max(0.025, center_gain)
     center_steer = -S['trackPos'] * center_gain
-    R['steer'] = clip(angle_steer + center_steer, -1, 1)
 
     # ----- Physics-based corner speed limit -----
     # Use all 19 track sensors with a weighted lookahead.
@@ -556,6 +555,13 @@ def drive_example(c):
     # d_meters ≈ sensor_reading (TORCS units ≈ metres up to 200 m)
     # Simplifies to: v_limit ≈ 14.1 * sqrt(d)  km/h  (conservative factor keeps damage=0)
     track = S.get('track', [100] * 19)
+    # Anticipatory steering: sensor fan asymmetry previews upcoming corners.
+    # Left sensors shorter than right → left bend ahead → pre-steer left (negative).
+    # Gain 0.0008 is small — just enough to begin turning before angle sensor reacts.
+    left_avg  = sum(track[0:9])  / 9.0
+    right_avg = sum(track[10:19]) / 9.0
+    preview_steer = -(right_avg - left_avg) * 0.0008
+    R['steer'] = clip(angle_steer + center_steer + preview_steer, -1, 1)
     # Sensor weights: peak at centre (index 9), tapering off to sides
     weights = [0.05, 0.05, 0.08, 0.10, 0.12, 0.15, 0.17, 0.20, 0.22,
                0.25,
@@ -574,8 +580,8 @@ def drive_example(c):
     k_blend = 14.1 + (30.0 - 14.1) * max(0.0, min(1.0, (soft_min - 50) / 100.0))
     # Physics-based speed cap
     physics_limit = k_blend * (lookahead ** 0.5)
-    # Absolute ceiling: 280 km/h (matches TORCS car top speed range)
-    target_speed = min(280, physics_limit)
+    # Absolute ceiling: raised to 320 km/h to let physics model govern on long straights
+    target_speed = min(320, physics_limit)
 
     # ----- Throttle / Brake -----
     speed_error = target_speed - speed
