@@ -588,8 +588,8 @@ def drive_example(c):
     # ----- Throttle / Brake -----
     speed_error = target_speed - speed
     if speed_error > 0:
-        # Faster accel ramp (0.10/step vs old 0.05) — reaches full throttle in ~2 s.
-        R['accel'] = clip(R['accel'] + 0.10, 0, 1)
+        # Accel ramp 0.20/step — reaches full throttle in ~0.1s after corner exit.
+        R['accel'] = clip(R['accel'] + 0.20, 0, 1)
         R['brake'] = 0
     else:
         # Proportional braking scaled to current speed so high-speed stops are firm.
