@@ -1,170 +1,208 @@
-# gym-torcs — Improved RL Environment for TORCS
+# gym-torcs — High-Performance Rule-Based Driver for TORCS
 
-A Python 3 OpenAI-Gym-style reinforcement learning environment for the
-[TORCS](http://torcs.sourceforge.net/) open-source racing simulator, with
-significant driving-model improvements on top of the original gym-torcs.
-
-## Key improvements over the original gym-torcs
-
-### Physics-based corner speed control (`snakeoil3_gym.py`, `gym_torcs.py`)
-The original client used a fixed 150 km/h cap and a simple linear formula
-that kept the car far below its performance envelope.
-The new model derives the safe corner entry speed from the track sensors:
-
-```
-v_safe = 14.1 × √(lookahead_distance)   [km/h]
-```
-
-This is grounded in `v = √(2μgd)` with μ ≈ 0.9g (TORCS tyre grip).
-On a long straight (200 m clear) the car is now allowed up to **199 km/h**;
-on a tight 30 m corner it caps at **77 km/h** — automatically, with no
-hand-tuned per-corner constants.
-
-### Weighted wide-angle lookahead
-All 19 track range-finder sensors are used, weighted by their proximity to
-straight-ahead.  A hard minimum of the 7 most central sensors is blended
-with a weighted average, so the car sees corners arriving early and brakes
-smoothly rather than stomping the brake at the last instant.
-
-### Speed-scaled steering centering
-At high speed a fixed centering gain causes oscillation.  The centering
-coefficient now tapers linearly from 0.20 at ≤50 km/h down to 0.025 at
-≥250 km/h, keeping the car stable on fast straights while still pulling
-it back from walls at low speed.
-
-### Proportional, speed-aware braking
-Braking force scales with current speed (`divisor = max(30, speed × 0.25)`),
-producing firm stops from high-speed approach corners while staying gentle
-at low speeds.
-
-### Faster throttle ramp
-Throttle increment raised from 0.05/step to 0.10/step (50 Hz),
-reaching full power in ~2 s instead of ~4 s after a corner exit.
-
-### Tighter automatic gear thresholds
-Gears are engaged 10–15 km/h earlier, keeping the engine in its power band.
-
-### Stuck recovery
-If `speedX < 3 km/h` and `trackPos > 0.8`, the car automatically engages
-reverse, steers away from the wall, and drives back onto the track.
-
-### Benchmark results
-
-| Version | Race time | Top speed | Damage |
-|---|---|---|---|
-| Original | DNF (stuck) | — | — |
-| Improved v1 | 01:55:39 | 150 km/h | 0 |
-| Improved v2 (current) | TBD | up to 280 km/h | 0 target |
+A Python 3 OpenAI-Gym-style environment for the
+[TORCS](http://torcs.sourceforge.net/) open-source racing simulator,
+with a fully rewritten rule-based driving model built on top of the
+original gym-torcs.
 
 ---
 
-```torcs_jm_par.py``` is the main racing file used. A list of options and
-possible parameters can be found inside as comments.
+## Best result
 
-This file supports the TORCS Race Runner (different project) so changing
-how the options work could break that.
+| Track | Lap time | Top speed | Damage |
+|---|---|---|---|
+| Michigan oval (20 laps) | **01:55:10** | **249 km/h** | **0** |
 
-```run-cars.py``` is a script to run multicar races in TORCS, using
-```torcs_jm_par.py```. Changing how ports work in ```torcs_jm_par.py```
-could break ```run-cars.py```.
+---
 
-Standard Python is required (no extra dependencies for these two files).
-Confirmed working with Python 3.11.8.
+## How to run
 
-The other two additions (```snakeoil3_jm2.py``` and ```jmcncarai.py```) are
-not original work; they were included in the folder downloaded from IBM.
+1. Launch TORCS and start a Practice race on the Michigan oval.
+2. In a second terminal:
 
-# Gym-TORCS (original README)
-
-Gym-TORCS is the reinforcement learning (RL) environment in TORCS domain with OpenAI-gym-like interface.
-TORCS is the open-rource realistic car racing simulator recently used as RL benchmark task in several AI studies.
-
-Gym-TORCS is the python wrapper of TORCS for RL experiment with the simple interface (similar, but not fully) compatible with OpenAI-gym environments. The current implementaion is for only the single-track race in practie mode. If you want to use multiple tracks or other racing mode (quick race etc.), you may need to modify the environment, "autostart.sh" or the race configuration file using GUI of TORCS.
-
-This code is developed based on vtorcs (https://github.com/giuse/vtorcs)
-and python-client for torcs (http://xed.ch/project/snakeoil/index.html).
-
-The detailed explanation of original TORCS for AI research is given by Daniele Loiacono et al. (https://arxiv.org/pdf/1304.1672.pdf)
-
-Because torcs has memory leak bug at race reset.
-As an ad-hoc solution, we relaunch and automate the gui setting in torcs.
-Any better solution is welcome!
-
-# Requirements
-We are assuming you are using Ubuntu 14.04 LTS/16.04 LTS machine and installed
-* Python 3
-* xautomation (http://linux.die.net/man/7/xautomation)
-* OpenAI-Gym (https://github.com/openai/gym)
-* numpy
-* vtorcs-RL-color (installation of vtorcs-RL-color is explained in vtorcs-RL-color directory)
-
-# Example Code
-The example code and agent are written in example_experiment.py and sample_agent.py.
-
-# Initialization of the Race
-After the insallation of vtorcs-RL-color, you need to initialize the race setting. You can find the detailed explanation in a document (https://arxiv.org/pdf/1304.1672.pdf), but here I show the simple gui-based setting.
-
-So first you need to run
-```
-sudo torcs
-```
-in the terminal, the GUI of TORCS should be launched.
-Then, you need to choose the race track by following the GUI (Race --> Practice --> Configure Race) and open TORCS server by selecting Race --> Practice --> New Race. This should result that TORCS keeps a blue screen with several text information.
-
-If you need to treat the vision input in your AI agent, you have to set the small image size in TORCS. To do so, you have to run
-```
+```bash
 python snakeoil3_gym.py
 ```
-in the second terminal window after you open the TORCS server (just as written above). Then the race starts, and you can select the driving-window mode by F2 key during the race.
 
-After the selection of the driving-window mode, you need to set the appropriate gui size. This is done by using the display option mode in Options --> Display. You can select the Screen Resolution, and you need to select 64x64 for visual input (our immplementation only support this screen size, other screen size results the unreasonable visual information). Then, you need to shut down TORCS to complete the configuration for the vision treatment.
+The driver connects automatically on the default port. Do **not** hardcode
+the port — the `Client` class reads it from the command line.
 
+---
 
-# Simple How-To
+## Driver architecture (`snakeoil3_gym.py` → `drive_example()`)
+
+All driving logic lives in a single function called every simulation step
+(~50 Hz). No machine learning, no pre-recorded data — pure sensor-reactive
+control.
+
+### 1. Physics-based corner speed model
+
+```
+target_speed = min(320, k_blend × √lookahead)
+```
+
+- **`soft_min`** — the maximum of the 7 most forward-facing track sensors
+  (indices 6–12). Using the maximum rather than minimum filters out spurious
+  short readings caused by the inner wall receding at an angle, so the car
+  does not brake prematurely on long straights.
+- **`lookahead`** — blends `soft_min` (60%) with a weighted average of all
+  19 sensors (40%) for smoothness.
+- **`k_blend`** — variable coefficient: `14.1` at `soft_min ≤ 50 m`
+  (tight hairpin, physics grip limit), linearly rising to `50.0` at
+  `soft_min ≥ 150 m` (open straight). The hairpin value is derived from
+  `v = √(2μgd)` with μ ≈ 0.9g.
+
+### 2. Anticipatory (preview) steering
+
+The 19 sensors are arranged in a fan. Asymmetry between the left and right
+near-forward sensors (indices 3–8 vs 10–15) reveals an upcoming corner
+before the car's heading angle changes:
+
+```python
+imbalance   = right_near_avg − left_near_avg   # positive = left corner ahead
+preview_gain = 0.0012 + 0.000020 × max(0, speed − 50)
+preview_steer = −imbalance × preview_gain
+```
+
+The gain **scales with speed**: at 200 km/h the car starts rotating into the
+corner ~3.5× earlier than at low speed, so it arrives at the apex already
+pointed correctly instead of braking to near-zero and then turning.
+
+### 3. Braking-phase steer boost
+
+During braking (`speed > target_speed`), the computed steer signal is
+amplified by **1.5×**:
+
+```python
+R['steer'] = clip(R['steer'] * 1.5, -1, 1)
+```
+
+This coordinates braking and steering simultaneously — the car rotates into
+the corner *while* slowing down rather than after.
+
+### 4. Speed-scaled steering centering
+
+```python
+center_gain = max(0.025, 0.20 − 0.0007 × max(0, speed − 50))
+```
+
+At ≤50 km/h: gain = 0.20 (strong wall-avoidance).
+At 200 km/h: gain = 0.07 (gentle, no wobble on straights).
+
+### 5. Throttle and braking
+
+- **Accel ramp**: `+0.20/step` — reaches full throttle in ~0.1 s after
+  corner exit.
+- **Braking divisor**: `max(30, speed × 0.25)` — firm at high speed,
+  gentle at low speed.
+- **TCS**: backs off throttle by 0.2 when rear wheel spin exceeds front
+  by >5 rad/s.
+
+### 6. Automatic transmission
+
+| Speed (km/h) | Gear |
+|---|---|
+| < 40 | 1 |
+| 40–70 | 2 |
+| 70–100 | 3 |
+| 100–135 | 4 |
+| 135–170 | 5 |
+| > 170 | 6 |
+
+### 7. Stuck recovery
+
+If `|speedX| < 3 km/h` and `|trackPos| > 0.8`, engage reverse, steer away
+from the wall, apply 50% throttle.
+
+---
+
+## Optimisation history
+
+| Commit | Change | Lap time | Top speed |
+|---|---|---|---|
+| `a9664b1` | soft-min + variable-k baseline | 02:10:91 | — |
+| `e8e1e52` | low-speed boost safety fix | 02:10:66 | — |
+| `0d7d6e3` | soft_min index `[2]→[3]` | 02:09:78 | 206 |
+| `8cdc782` | soft_min index `[3]→[4]` | 02:09:27 | 202 |
+| `d9bc553` | soft_min index `[4]→[5]` | 02:08:02 | 208 |
+| `02cbdd4` | soft_min index `[5]→[6]` (max) | 02:06:66 | 209 |
+| `92ed4b4` | k ceiling `17.0→17.5` | 02:06:25 | 212 |
+| `888f287` | k ceiling `17.5→19.0` | 02:05:82 | 208 |
+| `eab67b7` | k ceiling `19.0→25.0` | 02:03:93 | 216 |
+| `3ae2e6a` | k ceiling `25.0→30.0` | 02:02:90 | 219 |
+| `b385878` | k ceiling `30.0→40.0` | 01:59:04 | 231 |
+| `bff8305` | anticipatory steer + ceiling 320 | 02:01:28 | 220 |
+| `f7a8dc7` | k ceiling `40.0→50.0` | 01:58:49 | 233 |
+| `eab5bf5` | tighter sensor range for preview steer | 01:58:32 | 235 |
+| `fe1e9f7` | accel ramp `0.10→0.20/step` | 01:57:43 | 235 |
+| `26d00b9` | braking-phase steer boost `1.5×` | 01:55:65 | 236 |
+| `d931060` | braking-phase steer boost `2.0×` | 01:55:45 | 236 |
+| `8cb33a1` | **speed-scaled preview gain** | **01:55:10** | **249** |
+
+---
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `snakeoil3_gym.py` | **Main driver** — all driving logic in `drive_example()` |
+| `gym_torcs.py` | OpenAI-Gym wrapper for RL use |
+| `practice.xml` | Race config: Michigan oval, 20 laps |
+| `jmcncarai.py` | Reference client (IBM-supplied, unmodified) |
+| `snakeoil3_jm2.py` | Reference client (IBM-supplied, unmodified) |
+
+---
+
+## Track: Michigan Oval
+
+| Segment | Type | Radius | Distance |
+|---|---|---|---|
+| 0 | Left sweeper | 600 m | 0–356 m |
+| 100 | Left sweeper | 535 m | 356–524 m |
+| **200** | **Tight hairpin** | **120 m** | **524–792 m** |
+| 400–600 | Pit straight | — | 792–1520 m |
+| **700** | **Tight hairpin** | **120 m** | **1520–1787 m** |
+| 800 | Left sweeper | 535 m | 1787–1955 m |
+| 900 | Left sweeper | 600 m | 1955–2312 m |
+
+All corners are left-hand turns. Track width: 18 m.
+The two hairpins (r=120 m) set the physics safety floor: `k=14.1`,
+`target_speed ≈ 117 km/h` at the apex.
+
+---
+
+# Original gym-torcs README
+
+Gym-TORCS is the reinforcement learning (RL) environment in TORCS domain
+with OpenAI-gym-like interface. TORCS is the open-source realistic car racing
+simulator recently used as RL benchmark task in several AI studies.
+
+This code is developed based on
+[vtorcs](https://github.com/giuse/vtorcs) and
+[python-client for torcs](http://xed.ch/project/snakeoil/index.html).
+
+The detailed explanation of original TORCS for AI research is given by
+Daniele Loiacono et al. (https://arxiv.org/pdf/1304.1672.pdf)
+
+## Requirements
+
+- Python 3
+- xautomation
+- OpenAI-Gym
+- numpy
+- vtorcs-RL-color
+
+## Simple How-To
 
 ```python
 from gym_torcs import TorcsEnv
 
-#### Generate a Torcs environment
-# enable vision input, the action is steering only (1 dim continuous action)
-env = TorcsEnv(vision=True, throttle=False)
+env = TorcsEnv(vision=False, throttle=True)
+ob = env.reset(relaunch=True)
 
-# without vision input, the action is steering and throttle (2 dim continuous action)
-# env = TorcsEnv(vision=False, throttle=True)
-
-ob = env.reset(relaunch=True)  # with torcs relaunch (avoid memory leak bug in torcs)
-# ob = env.reset()  # without torcs relaunch
-
-# Generate an agent
 from sample_agent import Agent
-agent = Agent(1)  # steering only
+agent = Agent(1)
 action = agent.act(ob, reward, done, vision=True)
-
-# single step
 ob, reward, done, _ = env.step(action)
-
-# shut down torcs
 env.end()
 ```
-
-# 
-
-# Add Noise in Low-dim Sensors
-
-If you want to apply sensor noise in low-dimensional sensors, you should 
-
-```
-os.system('torcs -nofuel -nodamage -nolaptime -vision -noisy &')
-os.system('torcs -nofuel -nolaptime -noisy &')
-```
-
-at 33 & 35th lines in gym_torcs.py
-
-# Great Application
-gym-torcs was utilized in DDPG experiment with Keras by Ben Lau. 
-This experiment is really great!
-
-https://yanpanlau.github.io/2016/10/11/Torcs-Keras.html
-
-# Acknowledgement
-gym_torcs was developed during the spring internship 2016 at Preferred Networks.
