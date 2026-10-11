@@ -562,11 +562,16 @@ def drive_example(c):
                0.22, 0.20, 0.17, 0.15, 0.12, 0.10, 0.08, 0.05, 0.05]
     # Weighted minimum lookahead distance
     w_dist = sum(w * d for w, d in zip(weights, track)) / sum(weights)
-    # Also take the hard minimum of the 7 most forward sensors for safety
-    hard_min = min(track[6:13])
-    lookahead = 0.6 * hard_min + 0.4 * w_dist   # blend: safety + smoothness
-    # Physics-based speed cap; coefficient 14.1 tuned to TORCS grip model
-    physics_limit = 14.1 * (lookahead ** 0.5)
+    # Soft-min: 3rd-lowest of 7 forward sensors (avoids false braking from receding inner wall)
+    forward_sensors = sorted(track[6:13])
+    soft_min = forward_sensors[2]
+
+    lookahead = 0.6 * soft_min + 0.4 * w_dist   # blend: safety + smoothness
+    # Variable-k: scale coefficient up on wide straights/sweepers, keep 14.1 on tight corners.
+    # At soft_min=50m (tight hairpin): k=14.1; at soft_min=150m (sweeper): k blends toward 17.0
+    k_blend = 14.1 + (17.0 - 14.1) * max(0.0, min(1.0, (soft_min - 50) / 100.0))
+    # Physics-based speed cap
+    physics_limit = k_blend * (lookahead ** 0.5)
     # Absolute ceiling: 280 km/h (matches TORCS car top speed range)
     target_speed = min(280, physics_limit)
 
@@ -601,7 +606,7 @@ def drive_example(c):
         R['brake'] = 0
         return
 
-    # ----- Automatic Transmission (tighter thresholds = higher RPM power band) -----
+    # ----- Automatic Transmission -----
     R['gear'] = 1
     if speed > 40:
         R['gear'] = 2
